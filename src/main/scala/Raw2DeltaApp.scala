@@ -7,25 +7,27 @@ object Raw2DeltaApp extends App {
 
   val spark = SparkSession.builder().master("local[*]").getOrCreate()
 
-  private val rawDf: DataFrame = spark.read
-    .option("header", "true")
-    .schema(Schemas.schema)
-    .csv(Paths.raw)
-    .withColumn("changed", when(col("updated").isNotNull, col("updated")).otherwise(col("created")))
+  extractAndLoad()
 
-  val deltaDf = rawDf
-    .withColumn("rank", rank.over(Window.partitionBy("rut").orderBy(col("changed").desc)))
-    .where(col("rank").equalTo(1))
-    .select("rut", "value", "created", "updated")
-    .sort("rut")
+  private def extractAndLoad(): Unit = {
+    val rawDf: DataFrame = spark.read
+      .option("header", "true")
+      .schema(Schemas.schema)
+      .csv(Paths.raw)
+      .withColumn("changed", when(col("updated").isNotNull, col("updated")).otherwise(col("created")))
 
-  deltaDf.write
-    .format("delta")
-    .option("overwriteSchema", "true")
-    .option("header", "true")
-    .mode(SaveMode.Overwrite)
-    .save(Paths.delta)
+    val deltaDf = rawDf
+      .withColumn("rank", rank.over(Window.partitionBy("rut").orderBy(col("changed").desc)))
+      .where(col("rank").equalTo(1))
+      .select("rut", "value", "created", "updated")
+      .sort("rut")
 
-  deltaDf.show()
+    deltaDf.write
+      .format("delta")
+      .option("overwriteSchema", "true")
+      .option("header", "true")
+      .mode(SaveMode.Overwrite)
+      .save(Paths.delta)
+  }
 
 }
